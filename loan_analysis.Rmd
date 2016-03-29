@@ -1,0 +1,106 @@
+---
+output: pdf_document
+---
+Loan Analysis
+==========================================
+
+--Main Analysis--
+
+We consider the relationship between EmploymentStatus, IsBorrowerHomeowner, AmountDelinquent. But instead of use the value of AmountDelinquent, we transform the AmountDelinquent into people who had delinquecies once, i.e., for each borrower, if the AmountDelinquent is larger than zero then we replace it with one. And calculate the percentage of all the borrowers who had delinquency with or without home for each EmploymentStatus. Because we want to see if EmploymentStatus and IsBorrowerHomeower will be able to predict people's ability to pay interets back. One hypothesis is that, it can, and people without job and home will have the highest percentage of delinquency.
+
+
+```{r}
+library(ggplot2)
+loan_data <- read.csv("hw5-prosperLoanData.csv")
+df_1 <- subset(loan_data, select = c(EmploymentStatus, IsBorrowerHomeowner, AmountDelinquent))
+df_1[which(df_1$AmountDelinquent>0),3] <- 1
+df_1 <- df_1[!is.na(df_1$AmountDelinquent),]
+df_1 <- xtabs(AmountDelinquent ~ EmploymentStatus + IsBorrowerHomeowner, df_1) #to count the number of borrower who had delinquency on 
+df_1 <- as.data.frame(df_1)
+df_1 <- df_1[which(df_1$Freq>0),]
+df_total <- aggregate(df_1$Freq, list(df_1$EmploymentStatus), FUN = sum)
+df_1[1:7,4] <- df_1[1:7,3]/df_total[,2] #to calculate the percentage of delinquence in each employmentstatus
+df_1[8:14,4] <- df_1[8:14,3]/df_total[,2]
+names(df_1) <- c("EmploymentStatus", "IsBorrowerHomeowner", "NumOfBorrowerHaveDelinquecy", "RatioOfHomeownerInEachEmployment")
+p <- ggplot(data = df_1, aes(x =EmploymentStatus , y = IsBorrowerHomeowner, fill = RatioOfHomeownerInEachEmployment)) + geom_raster() + coord_flip() + ggtitle("Delinquence Percentage Compare")
+p
+```
+
+
+In the plot, people who get part-time and not employed have the most significant constrast on IsBorrowerHomeowner. People who don't have full-time job and home are most unlikely to have stable income. In this case, they are most likely to have deliquency.
+
+We interested in the correlation between ProserRating, ProsperScore and the number of Investors. According to their definition, ProserRating and ProsperScore represent revenue and risk each here. Normally in investment, the higher the risk, the higher revenue. So here, we are interested in the types of investors in Prosper.com. That is to say, do they prefer a stable way or an adventurous way of investing?
+
+
+```{r}
+df_2 <- subset(loan_data, select = c(ProsperRating..numeric., ProsperScore, Investors))
+df_2 <- df_2[which(df_2$ProsperRating..numeric.>0),]
+df_2 <- xtabs(Investors ~ ProsperRating..numeric. + ProsperScore, df_2) 
+df_2 <- as.data.frame(df_2)
+names(df_2)[3] <- "NumberOfInvestors"
+p <- ggplot(df_2, aes(x = ProsperRating..numeric., y = ProsperScore)) + geom_point(aes(size = NumberOfInvestors)) + ggtitle("Investors's Investing Tendency")
+p
+```
+
+
+Noting that in Prosper.com's measurement, the higher the value in ProsperScore and ProsperRating, the lower the risk and the lower the revenue. So we can see from this plot that most of the investors in Prosper.com prefer a more stable way of investing--low risk and low revenue.
+
+Knowing the types of our investors, we continue to wonder what kind of loans they usually choose. Since most of the loan listings posted by borrowers are debt consolidation. Only counting the total number of investors in each loan type will cause a biased result. So here  we calculate the average number of investors in each loan type.
+
+
+```{r}
+df_3 <- subset(loan_data, select = c(ListingCategory..numeric., Investors))
+df_3 <- df_3[which(df_3$ListingCategory..numeric.>0),]
+Category <- df_3$ListingCategory..numeric.
+df_3 <- aggregate(df_3$Investors, list(ListingCategory = df_3$ListingCategory..numeric.), FUN = sum)
+names(df_3)[2] <- "Num_Investors"
+d <- table(Category)
+df_3 <- cbind(df_3, d) #get a df of "cate", "num_investors", "num_loans"
+df_3$Choose_Freq <- df_3$Num_Investors/df_3$Freq #calculate for each category, the number of investors for each loan
+df_3 <- subset(df_3, select = c(ListingCategory, Choose_Freq))
+CategoryName <- c("1-Debt Consolidation", "2-Home Improvement", "3-Business", "4-Personal Loan", "5-Student Use", "6-Auto", "7-Other", "8-Baby&Adoption", "9-Boat", "10-Cosmetic Procedure", "11-Engagement Ring", "12-Green Loans", "13-Household Expenses", "14-Large Purchases", "15-Medical/Dental", "16-Motorcycle", "17-RV", "18-Taxes", "19-Vacation", "20-Wedding Loans")
+df_3[,1] <- CategoryName
+p <- ggplot(data = df_3, aes(x = ListingCategory, y = Choose_Freq)) + geom_bar(stat="identity") + coord_flip() + ggtitle("Average Number Of Investors For Each Loan Type")
+p
+```
+
+From the plot we see that, investors have the tendency to choose loans of "Personal loan", "Business" ,"Home Improvement" and "Student Use". So according to these result, maybe we can consider putting more ads targeting at people who may have these kinds of loans most.
+
+Combining the inference from above, we infer that the reason that investors have the tendency to choose that kind of loan type is because these loans are more stable, i.e, have higher ProsperScore and ProsperRating. To further see that, we plot the distribution for each category to see their risk and revenue.
+
+
+```{r}
+df_4 <- subset(loan_data, select = c(ProsperRating..numeric., ProsperScore,          ListingCategory..numeric.))
+df_4 <- df_4[which(df_4$ListingCategory..numeric.>0),]
+df_4 <- data.frame(table(df_4$ProsperRating..numeric., df_4$ProsperScore, df_4$ListingCategory..numeric.))
+names(df_4) <- c("ProsperRating..numeric.", "ProsperScore", "ListingCategory..numeric.", "Freq")
+df_name <- as.numeric(df_4[,3])
+CategoryName2 <- c("1-Debt Conso", "2-Home Improve", "3-Business", "4-Personal Loan", "5-Student Use", "6-Auto", "7-Other", "8-Baby&Adoption", "9-Boat", "10-Cosmetic Pro", "11-Engage Ring", "12-Green Loan", "13-House Expen", "14-Large Purch", "15-Medi/Denti", "16-Motorcycle", "17-RV", "18-Taxes", "19-Vacation", "20-Wedding")
+for (i in 1:20) {
+    df_name[df_name == i] <- CategoryName2[i]
+}
+df_4 <- cbind(df_4, df_name)
+df_4[,4] <- log(df_4[,4])
+p <- ggplot(data=df_4, aes(x=factor(ProsperRating..numeric.), y=factor(ProsperScore))) + geom_point(aes(size = Freq)) + scale_x_discrete("ProsperRating..numeric.") + scale_y_discrete("ProsperScore") + facet_wrap(~df_name) + ggtitle("Loan Type Risk And Revenue Distribution")
+p
+```
+
+
+The result is not that significant to directly show that the loan type that investors prefer to choose tends to be more stable. But still we can see that Student Use loan shows this trace. Note that, the ProsperScore and ProsperRating is empty for Personal Loan in this dataset, so we are unable to see the result.
+
+--Conclusions--
+
+In order to attract more people and keep the present people to use Prosper.com, we need to provide more what investors like. Since our investors prefer to invest more safe loan to get low but stable revenue, It is important to design more criteria to make sure their stable low investment revenue. Finding out the types of loans that tend to be more safe will also help us to put more targeted ads.
+ 
+--Other Inferences--
+
+We also condsider a few relationships between variables, like:
+1)StatedMonthlyIncome and AmountDelinquencies:
+Normally, we would think that with higher StatedMonthlyIncome, the AmountDeliquencies will be less, but in this dataset, a lot of delinquencies are related to a high StatedMonthlyIncome. We tried to figure out the reason with TotalProsperLoans, because this might be caused by those high-income people borrow too much, but the TotalProsperLoans lack of lot of data, leading further analysis impossible.
+
+2)Recommendations and Investors:
+In this relationship, we assume that for each borrower, more recommendations from their friends, more Investors will invest in this loan. But unfortunenately, variable "Recommendation" contains few data for us to analyze.
+
+3)AmountDelinquencies and LP_CustomerPayments:
+We guess that with higher LP_CustomerPayments(i.e.higher pre charge-off), the AmountDelinquencies will also be higher. Because these types of borrower may sort of in a bad financial situation, so it is easier for them to be delinquent.
+
